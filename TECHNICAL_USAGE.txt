@@ -1,0 +1,152 @@
+Bitbucket Scanner - Technical Usage Guide
+=========================================
+
+Scope
+-----
+- This project scans Bitbucket Server/Data Center repositories.
+- It computes language distribution by bytes.
+- It can also collect branch metadata.
+
+What The Scanner Produces
+-------------------------
+Per repository:
+- project and repository identity
+- clone URL
+- repo_size_bytes
+- primary_language
+- language_distribution:
+  - language
+  - language_size_bytes
+  - file_count
+  - language_percentage
+- optional branch metadata:
+  - default_branch
+  - branch_count
+  - branches_truncated
+  - branches[] (name, latest_commit, is_default)
+- errors[]
+
+How The Scanner Works (Workflow)
+--------------------------------
+1. API layer fetches projects.
+2. API layer fetches repositories per project.
+3. Collector lists all file paths recursively:
+   GET /projects/{project}/repos/{repo}/files
+4. Collector gets file size with HEAD (no file download):
+   HEAD /projects/{project}/repos/{repo}/raw/{file_path}
+   and reads Content-Length.
+5. Classifier maps file extensions to language.
+6. Landmark classifier handles special filenames when needed.
+7. Service aggregates bytes and counts by language.
+8. Service computes percentages and primary language.
+9. Exporters write CSV and JSON.
+
+Branch Collection Workflow
+--------------------------
+When enabled:
+1. API calls /branches to list branches.
+2. API calls /branches/default to resolve default branch.
+3. Branch metadata is attached to output.
+
+Important:
+- Branch collection does not change language size calculations.
+- It adds metadata and extra API calls only.
+
+Threading And Performance
+-------------------------
+Two concurrency levels are used:
+
+1) Repository-level threads:
+- Controlled by --max-workers
+- Number of repositories scanned in parallel
+
+2) File-size threads per repository:
+- Controlled by --file-workers
+- Number of HEAD /raw calls in parallel for one repo
+
+Approximate request pressure:
+- concurrent_head_requests ~= max_workers * file_workers
+
+Example:
+- max-workers=8 and file-workers=16
+- up to about 128 concurrent HEAD requests
+
+Operational guidance:
+- Increase gradually.
+- If Bitbucket slows down, lower file-workers first.
+- Disable branch collection for faster baseline scans.
+
+Prerequisites
+-------------
+- Python 3.10+ recommended
+- Network access to internal Bitbucket Server/DC
+- A valid Bitbucket personal access token with read permissions
+
+Environment Variables (PowerShell)
+----------------------------------
+$env:BB_SERVER_URL="https://bitbucket.mycompany.com"
+$env:BB_SERVER_TOKEN="<token>"
+$env:BB_INSECURE="true"
+
+Optional:
+$env:BB_CA_BUNDLE="C:\\path\\corp-ca.pem"
+$env:OUTPUT_CSV="bitbucket_languages.csv"
+$env:OUTPUT_JSON="bitbucket_languages.json"
+$env:MAX_WORKERS="8"
+$env:FILE_WORKERS="16"
+$env:INCLUDE_BRANCHES="true"
+$env:MAX_BRANCHES="100"
+
+CLI Commands
+------------
+Basic:
+python main.py
+
+With explicit settings:
+python main.py ^
+  --server-url "https://bitbucket.mycompany.com" ^
+  --server-token "<token>" ^
+  --max-workers 8 ^
+  --file-workers 16 ^
+  --include-branches ^
+  --max-branches 100 ^
+  --out-csv "bitbucket_languages.csv" ^
+  --out-json "bitbucket_languages.json"
+
+Disable repo threading:
+python main.py --no-parallel
+
+Disable branches:
+python main.py --no-branches
+
+CSV And JSON Outputs
+--------------------
+CSV:
+- Flattened output (one row per repo x language)
+- Includes branch summary fields (default_branch, branch_count, branch_sample)
+
+JSON:
+- Full nested structure
+- Best for downstream processing and dashboards
+
+Where data is written:
+- --out-csv path (default: bitbucket_languages.csv)
+- --out-json path (default: bitbucket_languages.json)
+
+Troubleshooting
+---------------
+1. Request error / timeout:
+- Lower --file-workers and --max-workers.
+- Check token permissions.
+
+2. TLS issues in enterprise networks:
+- Keep BB_INSECURE=true (default in this project), or
+- Set BB_INSECURE=false and provide BB_CA_BUNDLE.
+
+3. Branch count looks low:
+- Increase --max-branches.
+- If max-branches is hit, branches_truncated=true.
+
+4. Scan is slow:
+- Start with --no-branches.
+- Tune workers based on Bitbucket capacity.

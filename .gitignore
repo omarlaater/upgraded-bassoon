@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+
+# Scanner outputs
+bitbucket_languages.csv
+bitbucket_languages.json
