@@ -55,7 +55,9 @@ def main():
             verify=verify,
         )
 
-        # Collector: project -> repo -> files (+ optional branches) -> size metadata.
+        # Collector: project -> repo -> archive metadata (+ optional branches).
+        # If archive download is unavailable, it falls back to the legacy
+        # `/files` + `HEAD /raw` workflow without changing the downstream shape.
         collector = RepositoryCollector(scraper)
         # Service: converts raw metadata into language distribution metrics.
         language_service = LanguageService(

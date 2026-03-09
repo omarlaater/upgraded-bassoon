@@ -38,16 +38,18 @@ payment-api
 Role: low-level Bitbucket API client.
 Functionality:
 - project/repo listing with pagination
-- file path listing via `/files`
-- file size by `HEAD /raw/{path}` using `Content-Length`
+- archive download via `/archive?format=zip`
+- zip-entry size extraction via `ZipInfo.file_size`
+- legacy fallback: file path listing via `/files`
+- legacy fallback: file size by `HEAD /raw/{path}` using `Content-Length`
 - branch listing + default branch discovery
 
 - `collectors/repository_collector.py`
 Role: raw data collection only.
 Functionality:
 - loops projects -> repos
-- collects file paths
-- fetches file sizes in parallel
+- prefers one archive download per repo for file metadata
+- falls back to recursive file listing + per-file HEAD requests when needed
 - optionally collects branch metadata
 - does **not** classify language
 
@@ -91,24 +93,31 @@ Functionality:
 
 ## API Facts Used by Scanner
 
-1. List files recursively:
+1. Preferred repository scan:
+
+`GET /projects/{project}/repos/{repo}/archive?format=zip`
+
+- returns a zip archive for the selected repo/ref
+- zip metadata already contains each file path and uncompressed file size
+
+2. Legacy fallback file listing:
 
 `GET /projects/{project}/repos/{repo}/files`
 
 - returns paths only
 - no file sizes in this response
 
-2. Get file size without downloading file body:
+3. Legacy fallback file size without downloading file body:
 
 `HEAD /projects/{project}/repos/{repo}/raw/{file_path}`
 
 - read header `Content-Length`
 
-3. List branches:
+4. List branches:
 
 `GET /projects/{project}/repos/{repo}/branches`
 
-4. Get default branch:
+5. Get default branch:
 
 `GET /projects/{project}/repos/{repo}/branches/default`
 
@@ -131,7 +140,7 @@ Environment variables:
 - `OUTPUT_CSV` (default: `bitbucket_languages.csv`)
 - `OUTPUT_JSON` (default: `bitbucket_languages.json`)
 - `MAX_WORKERS` (repo-level parallelism, default `8`)
-- `FILE_WORKERS` (per-repo file HEAD parallelism, default `16`)
+- `FILE_WORKERS` (legacy per-repo fallback HEAD parallelism, default `16`)
 - `INCLUDE_BRANCHES` (default `true`)
 - `MAX_BRANCHES` (max branches stored per repo, default `100`, `0` = unlimited)
 
@@ -181,7 +190,8 @@ One row per `repo x language`, plus branch metadata columns:
 
 ## Performance Notes
 
-- File sizing is the expensive part (1 `HEAD` call per file).
+- Archive-first scanning usually needs 1 request per repo for file metadata.
+- If archive download fails, the scanner falls back to 1 `HEAD` call per file.
 - Branch collection adds more calls per repo.
-- Tune `MAX_WORKERS` and `FILE_WORKERS` for your Bitbucket capacity.
+- Tune `MAX_WORKERS` first; `FILE_WORKERS` only matters during fallback.
 - Start conservative, then increase gradually while monitoring server load.

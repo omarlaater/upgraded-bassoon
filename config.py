@@ -14,7 +14,9 @@ OUTPUT_JSON = os.getenv("OUTPUT_JSON", "bitbucket_languages.json")
 
 # Concurrency
 DEFAULT_MAX_WORKERS = int(os.getenv("MAX_WORKERS", "8"))
-# Per-repository concurrency for HEAD /raw/{path} file size requests.
+# Legacy per-repository concurrency for HEAD /raw/{path} fallback requests.
+# Archive-first scans do not need this, but we keep the setting so the older
+# code path still works when the archive endpoint is unavailable.
 DEFAULT_FILE_WORKERS = int(os.getenv("FILE_WORKERS", "16"))
 
 # Branch metadata collection

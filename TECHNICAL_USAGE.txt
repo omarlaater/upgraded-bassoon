@@ -30,16 +30,21 @@ How The Scanner Works (Workflow)
 --------------------------------
 1. API layer fetches projects.
 2. API layer fetches repositories per project.
-3. Collector lists all file paths recursively:
+3. Collector tries the fast path first:
+   GET /projects/{project}/repos/{repo}/archive?format=zip
+4. Collector reads each zip entry locally:
+   - entry name -> repository-relative file path
+   - entry file_size -> original uncompressed file size
+5. If archive download fails, collector falls back to the legacy API path:
    GET /projects/{project}/repos/{repo}/files
-4. Collector gets file size with HEAD (no file download):
+   then
    HEAD /projects/{project}/repos/{repo}/raw/{file_path}
    and reads Content-Length.
-5. Classifier maps file extensions to language.
-6. Landmark classifier handles special filenames when needed.
-7. Service aggregates bytes and counts by language.
-8. Service computes percentages and primary language.
-9. Exporters write CSV and JSON.
+6. Classifier maps file extensions to language.
+7. Landmark classifier handles special filenames when needed.
+8. Service aggregates bytes and counts by language.
+9. Service computes percentages and primary language.
+10. Exporters write CSV and JSON.
 
 Branch Collection Workflow
 --------------------------
@@ -60,20 +65,25 @@ Two concurrency levels are used:
 - Controlled by --max-workers
 - Number of repositories scanned in parallel
 
-2) File-size threads per repository:
+2) Legacy fallback file-size threads per repository:
 - Controlled by --file-workers
 - Number of HEAD /raw calls in parallel for one repo
+- Only used when the archive strategy is unavailable
 
 Approximate request pressure:
-- concurrent_head_requests ~= max_workers * file_workers
+- archive-first: about max_workers concurrent archive downloads
+- fallback: concurrent_head_requests ~= max_workers * file_workers
 
 Example:
-- max-workers=8 and file-workers=16
+- archive-first with max-workers=8
+- up to about 8 archive downloads at once
+- fallback with max-workers=8 and file-workers=16
 - up to about 128 concurrent HEAD requests
 
 Operational guidance:
 - Increase gradually.
-- If Bitbucket slows down, lower file-workers first.
+- If Bitbucket slows down during archive scans, lower max-workers first.
+- If fallback is active, lower file-workers first.
 - Disable branch collection for faster baseline scans.
 
 Prerequisites
@@ -136,7 +146,8 @@ Where data is written:
 Troubleshooting
 ---------------
 1. Request error / timeout:
-- Lower --file-workers and --max-workers.
+- Lower --max-workers first.
+- If the scanner is using fallback, lower --file-workers too.
 - Check token permissions.
 
 2. TLS issues in enterprise networks:
@@ -148,5 +159,6 @@ Troubleshooting
 - If max-branches is hit, branches_truncated=true.
 
 4. Scan is slow:
+- Archive-first should be much faster than the legacy HEAD-per-file path.
 - Start with --no-branches.
 - Tune workers based on Bitbucket capacity.

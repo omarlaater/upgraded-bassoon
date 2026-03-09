@@ -107,9 +107,19 @@ class RepositoryCollector:
                 errors.append(branch_error)
 
         try:
-            file_paths = self.scraper.get_files(project_key, repo_slug)
+            # When branch metadata is available, reuse that ref for the file scan.
+            # This keeps archive extraction and legacy API fallback aligned to the
+            # same branch instead of whatever Bitbucket considers "current" later.
+            scan_ref = default_branch or ""
+            files, scan_strategy = self._collect_repo_files(
+                project_key=project_key,
+                repo_slug=repo_slug,
+                scan_ref=scan_ref,
+                file_workers=file_workers,
+                errors=errors,
+            )
         except Exception as exc:
-            print(f"error listing files for {repo_slug}: {exc}")
+            print(f"error collecting files for {repo_slug}: {exc}")
             return {
                 "project_key": project_key,
                 "project_name": project_name,
@@ -121,20 +131,12 @@ class RepositoryCollector:
                 "branch_count": len(branches),
                 "branches_truncated": branches_truncated,
                 "branches": branches,
-                "errors": errors + [f"list_files_failed: {exc}"],
+                "errors": errors + [f"file_collection_failed: {exc}"],
             }
 
-        filtered_paths = [path for path in file_paths if not self._is_ignored(path)]
-        files = self._collect_file_sizes(
-            project_key=project_key,
-            repo_slug=repo_slug,
-            file_paths=filtered_paths,
-            file_workers=file_workers,
-        )
-
         print(
-            f"{repo_name:40} files={len(filtered_paths):5} "
-            f"sized={sum(1 for f in files if f['size_bytes'] > 0):5} "
+            f"{repo_name:40} files={len(files):5} "
+            f"strategy={scan_strategy:8} "
             f"branches={len(branches):4}"
         )
 
@@ -190,19 +192,67 @@ class RepositoryCollector:
         ]
         return branches, default_branch, truncated, None
 
+    def _collect_repo_files(
+        self,
+        project_key: str,
+        repo_slug: str,
+        scan_ref: str,
+        file_workers: int,
+        errors: List[str],
+    ) -> Tuple[List[Dict], str]:
+        """
+        Prefer the single-archive workflow for speed, then fall back to the
+        legacy `/files` + `HEAD /raw` path if the server cannot provide it.
+        """
+        try:
+            files = self.scraper.get_archive_file_sizes(
+                project_key=project_key,
+                repo_slug=repo_slug,
+                at=scan_ref,
+            )
+            filtered_files = [
+                file_info for file_info in files if not self._is_ignored(file_info["path"])
+            ]
+            return filtered_files, "archive"
+        except Exception as exc:
+            # Keep the failure visible in the exported output, but do not stop the
+            # scan when the older path-based strategy can still succeed.
+            errors.append(f"archive_scan_failed_fallback_used: {exc}")
+            print(
+                f"archive scan failed for {repo_slug}: {exc}; "
+                "falling back to /files + HEAD"
+            )
+
+        file_paths = self.scraper.get_files(project_key, repo_slug, at=scan_ref)
+        filtered_paths = [path for path in file_paths if not self._is_ignored(path)]
+        files = self._collect_file_sizes(
+            project_key=project_key,
+            repo_slug=repo_slug,
+            file_paths=filtered_paths,
+            file_workers=file_workers,
+            at=scan_ref,
+        )
+        return files, "fallback"
+
     def _collect_file_sizes(
         self,
         project_key: str,
         repo_slug: str,
         file_paths: List[str],
         file_workers: int,
+        at: str = "",
     ) -> List[Dict]:
         if not file_paths:
             return []
 
         def one(path: str) -> Dict:
             try:
-                size = self.scraper.get_file_size(project_key, repo_slug, path)
+                size = self.scraper.get_file_size(
+                    project_key,
+                    repo_slug,
+                    path,
+                    at=at,
+                )
                 return {"path": path, "size_bytes": size}
             except Exception:
                 # Keep failures explicit as zero-sized entries so aggregation remains stable.
