@@ -9,6 +9,7 @@ from config import (
     DEFAULT_MAX_WORKERS,
     INCLUDE_BRANCHES,
 )
+from utils.datetime_utils import to_utc_iso
 
 
 IGNORE_DIRS = {
@@ -92,6 +93,8 @@ class RepositoryCollector:
         repo_slug = repo["slug"]
         repo_name = repo.get("name", repo_slug)
         clone_url = self._extract_clone_url(repo)
+        repo_created_date_raw = repo.get("createdDate", "")
+        repo_created_date_utc = to_utc_iso(repo_created_date_raw)
         errors: List[str] = []
 
         branches: List[Dict] = []
@@ -126,6 +129,8 @@ class RepositoryCollector:
                 "repo_slug": repo_slug,
                 "repo_name": repo_name,
                 "clone_url": clone_url,
+                "repo_created_date_raw": repo_created_date_raw,
+                "repo_created_date_utc": repo_created_date_utc,
                 "files": [],
                 "default_branch": default_branch,
                 "branch_count": len(branches),
@@ -146,6 +151,8 @@ class RepositoryCollector:
             "repo_slug": repo_slug,
             "repo_name": repo_name,
             "clone_url": clone_url,
+            "repo_created_date_raw": repo_created_date_raw,
+            "repo_created_date_utc": repo_created_date_utc,
             "files": files,
             "default_branch": default_branch,
             "branch_count": len(branches),

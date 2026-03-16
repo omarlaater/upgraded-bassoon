@@ -6,6 +6,7 @@ import requests
 from api.bitbucket_server import BitbucketServerScraper
 from collectors.repository_collector import RepositoryCollector
 from classifiers.extension_classifier import ExtensionClassifier
+from classifiers.file_kind_classifier import FileKindClassifier
 from classifiers.landmark_classifier import LandmarkClassifier
 from exporters.csv_exporter import save_csv
 from exporters.json_exporter import save_json
@@ -62,6 +63,7 @@ def main():
         # Service: converts raw metadata into language distribution metrics.
         language_service = LanguageService(
             extension_classifier=ExtensionClassifier(),
+            file_kind_classifier=FileKindClassifier(),
             landmark_classifier=LandmarkClassifier(),
         )
 

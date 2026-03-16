@@ -1,60 +1,54 @@
 import os
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError as exc:
+    raise RuntimeError(
+        "PyYAML is required to load classifiers/languages.yaml. "
+        "Install it with: pip install pyyaml"
+    ) from exc
 
 
-EXT_MAP = {
-    ".py": "Python",
-    ".java": "Java",
-    ".kt": "Kotlin",
-    ".kts": "Kotlin",
-    ".groovy": "Groovy",
-    ".scala": "Scala",
-    ".js": "JavaScript",
-    ".jsx": "JavaScript",
-    ".mjs": "JavaScript",
-    ".cjs": "JavaScript",
-    ".ts": "TypeScript",
-    ".tsx": "TypeScript",
-    ".cs": "C#",
-    ".cpp": "C++",
-    ".cc": "C++",
-    ".cxx": "C++",
-    ".h": "C/C++ Header",
-    ".hpp": "C/C++ Header",
-    ".c": "C",
-    ".go": "Go",
-    ".rs": "Rust",
-    ".php": "PHP",
-    ".rb": "Ruby",
-    ".swift": "Swift",
+TYPE_PRIORITY = {
+    "programming": 0,
+    "markup": 1,
+    "data": 2,
+    "prose": 3,
+}
+
+# Shared extensions need a deterministic winner when Linguist lists
+# multiple candidates. These defaults favor the most useful repo-level label.
+AMBIGUOUS_EXTENSION_DEFAULTS = {
+    ".cls": "Apex",
+    ".h": "C",
+    ".json": "JSON",
     ".m": "Objective-C",
     ".mm": "Objective-C++",
+    ".pl": "Perl",
+    ".sql": "SQL",
+    ".ts": "TypeScript",
     ".xml": "XML",
-    ".json": "JSON",
     ".yaml": "YAML",
     ".yml": "YAML",
-    ".toml": "TOML",
-    ".ini": "INI",
-    ".properties": "Properties",
-    ".sh": "Shell",
-    ".bash": "Shell",
-    ".zsh": "Shell",
-    ".ps1": "PowerShell",
-    ".sql": "SQL",
-    ".html": "HTML",
-    ".htm": "HTML",
-    ".css": "CSS",
-    ".scss": "SCSS",
-    ".sass": "Sass",
-    ".less": "Less",
-    ".dockerfile": "Dockerfile",
-    ".md": "Markdown",
-    ".txt": "Text",
-    ".env": "Env",
 }
 
 
 class ExtensionClassifier:
-    """Maps filename extensions to human-readable language labels."""
+    """Maps filenames and extensions to Linguist language labels."""
+
+    def __init__(self, languages_path: str | None = None):
+        if languages_path:
+            path = Path(languages_path)
+        else:
+            path = Path(__file__).with_name("languages.yaml")
+
+        self.languages_path = path
+        self.language_metadata = {}
+        self.filename_map = {}
+        self.extension_map = {}
+        self.interpreter_map = {}
+        self._load_linguist_data()
 
     def classify(self, files, scores):
         # Backward-compatible helper kept for existing call sites.
@@ -67,21 +61,97 @@ class ExtensionClassifier:
             scores[language] = scores.get(language, 0) + 1
         return scores
 
-    def detect_language(self, path: str) -> str | None:
+    def detect_language(self, path: str, interpreter: str | None = None) -> str | None:
+        filename = os.path.basename(path).lower()
+        if filename:
+            language = self.filename_map.get(filename)
+            if language:
+                return language
+
+        if interpreter:
+            language = self.interpreter_map.get(interpreter.lower())
+            if language:
+                return language
+
         _, ext = os.path.splitext(path)
         ext = ext.lower()
         if not ext:
             return None
 
-        language = EXT_MAP.get(ext)
-        return language
+        candidates = self.extension_map.get(ext, [])
+        return self._resolve_candidates(candidates, ext)
 
     def unknown_extension_label(self, path: str) -> str | None:
         """Return a stable label for unmapped extensions."""
         _, ext = os.path.splitext(path)
         ext = ext.lower()
-        if not ext:
-            return None
-        if ext in EXT_MAP:
+        if not ext or ext in self.extension_map:
             return None
         return f"Extension:{ext.strip('.')}"
+
+    def _load_linguist_data(self) -> None:
+        with self.languages_path.open("r", encoding="utf8") as stream:
+            raw_languages = yaml.safe_load(stream) or {}
+
+        self.language_metadata = {
+            language: metadata or {}
+            for language, metadata in raw_languages.items()
+        }
+
+        filename_candidates = {}
+        extension_candidates = {}
+        interpreter_candidates = {}
+
+        for language, metadata in self.language_metadata.items():
+            canonical_language = metadata.get("group") or language
+
+            for filename in metadata.get("filenames", []) or []:
+                filename_key = filename.lower()
+                filename_candidates.setdefault(filename_key, []).append(canonical_language)
+
+            for ext in metadata.get("extensions", []) or []:
+                ext_key = ext.lower()
+                extension_candidates.setdefault(ext_key, []).append(canonical_language)
+
+            for interpreter in metadata.get("interpreters", []) or []:
+                interpreter_key = interpreter.lower()
+                interpreter_candidates.setdefault(interpreter_key, []).append(
+                    canonical_language
+                )
+
+        self.filename_map = {
+            filename: self._resolve_candidates(candidates)
+            for filename, candidates in filename_candidates.items()
+        }
+        self.extension_map = {
+            ext: sorted(set(candidates))
+            for ext, candidates in extension_candidates.items()
+        }
+        self.interpreter_map = {
+            interpreter: self._resolve_candidates(candidates)
+            for interpreter, candidates in interpreter_candidates.items()
+        }
+
+    def _resolve_candidates(
+        self,
+        candidates: list[str],
+        ext: str | None = None,
+    ) -> str | None:
+        if not candidates:
+            return None
+
+        normalized_candidates = sorted(set(candidates))
+        if len(normalized_candidates) == 1:
+            return normalized_candidates[0]
+
+        if ext:
+            override = AMBIGUOUS_EXTENSION_DEFAULTS.get(ext)
+            if override in normalized_candidates:
+                return override
+
+        def sort_key(language: str) -> tuple[int, int, str]:
+            metadata = self.language_metadata.get(language, {})
+            language_type = metadata.get("type", "")
+            return (TYPE_PRIORITY.get(language_type, 99), len(language), language)
+
+        return sorted(normalized_candidates, key=sort_key)[0]
