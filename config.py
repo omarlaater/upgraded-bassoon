@@ -11,7 +11,10 @@ INSECURE = os.getenv("BB_INSECURE", "true").strip().lower() in {"1", "true", "ye
 # Output files
 OUTPUT_CSV = os.getenv("OUTPUT_CSV", "bitbucket_languages.csv")
 OUTPUT_JSON = os.getenv("OUTPUT_JSON", "bitbucket_languages.json")
-OUTPUT_EXTENSIONS_CSV = os.getenv("OUTPUT_EXTENSIONS_CSV", "bitbucket_extensions.csv")
+OUTPUT_EXTENSIONS_CSV = os.getenv(
+    "OUTPUT_EXTENSIONS_CSV",
+    "bitbucket_unmapped_extensions.csv",
+)
 
 # Concurrency
 DEFAULT_MAX_WORKERS = int(os.getenv("MAX_WORKERS", "8"))

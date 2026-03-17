@@ -28,8 +28,8 @@ class LanguageService:
         file_type_sizes = defaultdict(int)
         file_type_files = defaultdict(int)
         file_type_types = {}
-        extension_sizes = defaultdict(int)
-        extension_files = defaultdict(int)
+        unmapped_extension_sizes = defaultdict(int)
+        unmapped_extension_files = defaultdict(int)
 
         repo_size_bytes = 0
         files = repo_payload.get("files", [])
@@ -38,9 +38,6 @@ class LanguageService:
             path = file_info["path"]
             size_bytes = int(file_info.get("size_bytes", 0))
             repo_size_bytes += size_bytes
-            extension = _normalize_extension(path)
-            extension_sizes[extension] += size_bytes
-            extension_files[extension] += 1
 
             language = self.extension_classifier.detect_language(path)
             if not language:
@@ -54,10 +51,21 @@ class LanguageService:
                 if normalized_type == "programming":
                     language_sizes[language] += size_bytes
                     language_files[language] += 1
+                continue
+
+            if self.extension_classifier.has_known_extension(path):
+                continue
+
+            if self.extension_classifier.has_known_filename(path):
+                continue
+
+            extension = _normalize_extension(path)
+            unmapped_extension_sizes[extension] += size_bytes
+            unmapped_extension_files[extension] += 1
 
         programming_size_bytes = sum(language_sizes.values())
         file_type_size_bytes = sum(file_type_sizes.values())
-        extension_size_bytes = sum(extension_sizes.values())
+        unmapped_extension_size_bytes = sum(unmapped_extension_sizes.values())
         distribution = []
         for language, size_bytes in sorted(
             language_sizes.items(),
@@ -101,22 +109,22 @@ class LanguageService:
                 }
             )
 
-        extension_distribution = []
+        unmapped_extension_distribution = []
         for extension, size_bytes in sorted(
-            extension_sizes.items(),
+            unmapped_extension_sizes.items(),
             key=lambda item: item[1],
             reverse=True,
         ):
             percentage = (
-                (size_bytes / extension_size_bytes * 100.0)
-                if extension_size_bytes
+                (size_bytes / unmapped_extension_size_bytes * 100.0)
+                if unmapped_extension_size_bytes
                 else 0.0
             )
-            extension_distribution.append(
+            unmapped_extension_distribution.append(
                 {
                     "extension": extension,
                     "size_bytes": size_bytes,
-                    "file_count": extension_files[extension],
+                    "file_count": unmapped_extension_files[extension],
                     "percentage": round(percentage, 2),
                 }
             )
@@ -138,11 +146,11 @@ class LanguageService:
             "repo_size_bytes": repo_size_bytes,
             "programming_size_bytes": programming_size_bytes,
             "file_type_size_bytes": file_type_size_bytes,
-            "extension_size_bytes": extension_size_bytes,
+            "unmapped_extension_size_bytes": unmapped_extension_size_bytes,
             "primary_language": primary_language,
             "language_distribution": distribution,
             "file_type_distribution": file_type_distribution,
-            "extension_distribution": extension_distribution,
+            "unmapped_extension_distribution": unmapped_extension_distribution,
             "errors": repo_payload.get("errors", []),
         }
 
@@ -155,12 +163,14 @@ def print_summary(results: List[Dict]) -> None:
     total_bytes = 0
     total_programming_bytes = 0
     total_file_type_bytes = 0
+    total_unmapped_extension_bytes = 0
     total_branches = 0
 
     for repo in results:
         total_bytes += int(repo.get("repo_size_bytes", 0))
         total_programming_bytes += int(repo.get("programming_size_bytes", 0))
         total_file_type_bytes += int(repo.get("file_type_size_bytes", 0))
+        total_unmapped_extension_bytes += int(repo.get("unmapped_extension_size_bytes", 0))
         total_branches += int(repo.get("branch_count", 0))
         for lang_data in repo.get("language_distribution", []):
             language = lang_data["language"]
@@ -195,24 +205,27 @@ def print_summary(results: List[Dict]) -> None:
     print(f"Total bytes: {human_size(total_bytes)}")
     print(f"Total programming bytes: {human_size(total_programming_bytes)}")
     print(f"Total recognized file-type bytes: {human_size(total_file_type_bytes)}")
+    print(f"Total unmapped extension bytes: {human_size(total_unmapped_extension_bytes)}")
     print(f"Total branches discovered: {total_branches}")
 
-    extension_totals = defaultdict(int)
-    total_extension_bytes = 0
+    unmapped_extension_totals = defaultdict(int)
     for repo in results:
-        total_extension_bytes += int(repo.get("extension_size_bytes", 0))
-        for ext_data in repo.get("extension_distribution", []):
+        for ext_data in repo.get("unmapped_extension_distribution", []):
             extension = ext_data["extension"]
-            extension_totals[extension] += int(ext_data.get("size_bytes", 0))
+            unmapped_extension_totals[extension] += int(ext_data.get("size_bytes", 0))
 
-    if extension_totals:
-        print("\nTop Extensions (by bytes)")
+    if unmapped_extension_totals:
+        print("\nTop Unmapped Extensions (by bytes)")
         for extension, size_bytes in sorted(
-            extension_totals.items(),
+            unmapped_extension_totals.items(),
             key=lambda x: x[1],
             reverse=True,
         )[:10]:
-            pct = (size_bytes / total_extension_bytes * 100.0) if total_extension_bytes else 0.0
+            pct = (
+                (size_bytes / total_unmapped_extension_bytes * 100.0)
+                if total_unmapped_extension_bytes
+                else 0.0
+            )
             print(f"{extension:24} {human_size(size_bytes):>10} {pct:6.2f}%")
 
 

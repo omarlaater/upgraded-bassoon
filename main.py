@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--out-csv", default=config.OUTPUT_CSV)
     parser.add_argument("--out-json", default=config.OUTPUT_JSON)
     parser.add_argument("--out-extensions-csv", default=config.OUTPUT_EXTENSIONS_CSV)
-    parser.add_argument("--max-workers", type=int, default=config.DEFAULT_MAX_WORKERS)
+    parser.add_argument("--max-workers", ty'pe=int, default=config.DEFAULT_MAX_WORKERS)
     parser.add_argument("--file-workers", type=int, default=config.DEFAULT_FILE_WORKERS)
     parser.add_argument("--max-branches", type=int, default=config.DEFAULT_MAX_BRANCHES)
     parser.add_argument("--include-branches", dest="include_branches", action="store_true")
@@ -90,4 +90,4 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main())e('grtf b')

@@ -90,6 +90,16 @@ class ExtensionClassifier:
             return None
         return f"Extension:{ext.strip('.')}"
 
+    def has_known_extension(self, path: str) -> bool:
+        """Return True when the file extension exists in the Linguist extension map."""
+        _, ext = os.path.splitext(path)
+        return bool(ext and ext.lower() in self.extension_map)
+
+    def has_known_filename(self, path: str) -> bool:
+        """Return True when the basename exists in the Linguist filename map."""
+        filename = os.path.basename(path).lower()
+        return bool(filename and filename in self.filename_map)
+
     def get_language_type(self, language: str) -> str:
         """Return the Linguist type for a resolved language label."""
         metadata = self.language_metadata.get(language, {})

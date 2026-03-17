@@ -7,7 +7,7 @@ For a full technical runbook (setup, workflow, threading, branch behavior, troub
 - `TECHNICAL_USAGE.txt`
 
 This scanner is for **Bitbucket Server/Data Center only**.
-It computes programming language distribution by **bytes**, stores detected file types and raw extensions, and also reports repository branches.
+It computes programming language distribution by **bytes**, stores detected file types and unmapped extensions, and also reports repository branches.
 
 ## What It Produces
 
@@ -16,12 +16,12 @@ For each repository:
 - `repo_size_bytes`
 - `programming_size_bytes`
 - `file_type_size_bytes`
-- `extension_size_bytes`
+- `unmapped_extension_size_bytes`
 - `repo_created_date_utc` (when available from Bitbucket)
 - `primary_language` (largest programming language by bytes)
 - `language_distribution` (programming languages only)
 - `file_type_distribution` (all detected YAML-backed types, including XML/JSON/YAML/Markdown)
-- `extension_distribution` (all raw extensions, including `.xml`, `.pem`, `.jpg`, `.jar`)
+- `unmapped_extension_distribution` (only extensions not known in `languages.yaml`, like `.pem`, `.jpg`, `.zip`)
 - `default_branch`
 - `branch_count`
 - `branches` (name, latest commit, is_default)
@@ -37,10 +37,10 @@ payment-api
   XML       0.4 MB
   YAML      0.7 MB
 
-  extensions:
-  .java     7.8 MB
-  .xml      0.4 MB
-  .yml      0.7 MB
+  unmapped extensions:
+  .pem      0.1 MB
+  .zip      2.4 MB
+  .jpg      0.3 MB
 
   default branch: main
   branches: 24
@@ -85,7 +85,7 @@ Role: aggregation and metrics.
 Functionality:
 - groups bytes by programming language
 - groups all detected YAML-backed types separately for inventory/reporting
-- groups all raw extensions for exact repository inventory
+- groups only unmapped extensions for gap/audit reporting
 - keeps total repo bytes separate from programming bytes
 - calculates language percentages from programming bytes only
 - chooses primary language from programming languages only
@@ -157,7 +157,7 @@ Environment variables:
 - `BB_CA_BUNDLE` (optional when `BB_INSECURE=false`)
 - `OUTPUT_CSV` (default: `bitbucket_languages.csv`)
 - `OUTPUT_JSON` (default: `bitbucket_languages.json`)
-- `OUTPUT_EXTENSIONS_CSV` (default: `bitbucket_extensions.csv`)
+- `OUTPUT_EXTENSIONS_CSV` (default: `bitbucket_unmapped_extensions.csv`)
 - `MAX_WORKERS` (repo-level parallelism, default `8`)
 - `FILE_WORKERS` (legacy per-repo fallback HEAD parallelism, default `16`)
 - `INCLUDE_BRANCHES` (default `true`)
@@ -169,7 +169,7 @@ Environment variables:
 python main.py \
   --server-url "https://bitbucket.mycompany.com" \
   --server-token "<token>" \
-  --out-extensions-csv "bitbucket_extensions.csv" \
+  --out-extensions-csv "bitbucket_unmapped_extensions.csv" \
   --max-workers 8 \
   --file-workers 16 \
   --include-branches \
@@ -192,7 +192,7 @@ Each repo object contains:
 - `repo_slug`, `repo_name`, `clone_url`
 - `repo_created_date_raw`, `repo_created_date_utc`
 - `default_branch`, `branch_count`, `branches_truncated`, `branches[]`
-- `repo_size_bytes`, `programming_size_bytes`, `file_type_size_bytes`, `extension_size_bytes`, `primary_language`
+- `repo_size_bytes`, `programming_size_bytes`, `file_type_size_bytes`, `unmapped_extension_size_bytes`, `primary_language`
 - `language_distribution[]`
   - `language`
   - `language_size_bytes`
@@ -205,11 +205,11 @@ Each repo object contains:
   - `file_count`
   - `percentage` (percentage of `file_type_size_bytes`)
   - `eligible_for_primary`
-- `extension_distribution[]`
+- `unmapped_extension_distribution[]`
   - `extension`
   - `size_bytes`
   - `file_count`
-  - `percentage` (percentage of `extension_size_bytes`)
+  - `percentage` (percentage of `unmapped_extension_size_bytes`)
 - `errors[]`
 
 ### CSV (flat)
@@ -227,16 +227,16 @@ One row per `repo x programming language`, plus branch metadata columns:
 
 The richer `file_type_distribution` is kept in JSON output.
 
-### Extension CSV (flat)
+### Unmapped Extension CSV (flat)
 
-One row per `repo x extension`:
+One row per `repo x unmapped extension`:
 
-- `extension`
-- `extension_size_repo_bytes`
-- `extension_file_count`
-- `extension_percentage`
+- `unmapped_extension`
+- `unmapped_extension_size_repo_bytes`
+- `unmapped_extension_file_count`
+- `unmapped_extension_percentage`
 
-This file captures raw repository inventory like `.xml`, `.pem`, `.jpg`, `.jar`, and `(no_extension)`.
+This file captures only extensions that are not known in `languages.yaml`, such as `.pem`, `.jpg`, `.zip`, and `(no_extension)` for unknown files without extensions.
 
 ## Performance Notes
 

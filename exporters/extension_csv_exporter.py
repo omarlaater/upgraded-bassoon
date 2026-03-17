@@ -1,4 +1,4 @@
-"""CSV exporter for flattened repository/extension scanner output."""
+"""CSV exporter for flattened repository/unmapped-extension scanner output."""
 
 import csv
 
@@ -15,7 +15,7 @@ def save_extension_csv(results, path):
             branch.get("name", "") for branch in branches[:10] if branch.get("name")
         )
 
-        distribution = repo.get("extension_distribution", [])
+        distribution = repo.get("unmapped_extension_distribution", [])
         if not distribution:
             rows.append(
                 {
@@ -34,11 +34,11 @@ def save_extension_csv(results, path):
                     "repo_size_bytes": repo.get("repo_size_bytes", 0),
                     "programming_size_bytes": repo.get("programming_size_bytes", 0),
                     "file_type_size_bytes": repo.get("file_type_size_bytes", 0),
-                    "extension_size_bytes": repo.get("extension_size_bytes", 0),
-                    "extension": "(none)",
-                    "extension_size_repo_bytes": 0,
-                    "extension_file_count": 0,
-                    "extension_percentage": 0.0,
+                    "unmapped_extension_size_bytes": repo.get("unmapped_extension_size_bytes", 0),
+                    "unmapped_extension": "(none)",
+                    "unmapped_extension_size_repo_bytes": 0,
+                    "unmapped_extension_file_count": 0,
+                    "unmapped_extension_percentage": 0.0,
                 }
             )
             continue
@@ -61,11 +61,14 @@ def save_extension_csv(results, path):
                     "repo_size_bytes": repo.get("repo_size_bytes", 0),
                     "programming_size_bytes": repo.get("programming_size_bytes", 0),
                     "file_type_size_bytes": repo.get("file_type_size_bytes", 0),
-                    "extension_size_bytes": repo.get("extension_size_bytes", 0),
-                    "extension": ext_data.get("extension", "(none)"),
-                    "extension_size_repo_bytes": ext_data.get("size_bytes", 0),
-                    "extension_file_count": ext_data.get("file_count", 0),
-                    "extension_percentage": ext_data.get("percentage", 0.0),
+                    "unmapped_extension_size_bytes": repo.get(
+                        "unmapped_extension_size_bytes",
+                        0,
+                    ),
+                    "unmapped_extension": ext_data.get("extension", "(none)"),
+                    "unmapped_extension_size_repo_bytes": ext_data.get("size_bytes", 0),
+                    "unmapped_extension_file_count": ext_data.get("file_count", 0),
+                    "unmapped_extension_percentage": ext_data.get("percentage", 0.0),
                 }
             )
 
@@ -85,11 +88,11 @@ def save_extension_csv(results, path):
         "repo_size_bytes",
         "programming_size_bytes",
         "file_type_size_bytes",
-        "extension_size_bytes",
-        "extension",
-        "extension_size_repo_bytes",
-        "extension_file_count",
-        "extension_percentage",
+        "unmapped_extension_size_bytes",
+        "unmapped_extension",
+        "unmapped_extension_size_repo_bytes",
+        "unmapped_extension_file_count",
+        "unmapped_extension_percentage",
     ]
 
     with open(path, "w", newline="", encoding="utf8") as f:
@@ -97,4 +100,4 @@ def save_extension_csv(results, path):
         writer.writeheader()
         writer.writerows(rows)
 
-    print("Extension CSV saved:", path)
+    print("Unmapped extension CSV saved:", path)
