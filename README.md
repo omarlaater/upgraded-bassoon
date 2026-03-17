@@ -14,6 +14,7 @@ It computes programming language distribution by **bytes** and also reports repo
 For each repository:
 
 - `repo_size_bytes`
+- `programming_size_bytes`
 - `repo_created_date_utc` (when available from Bitbucket)
 - `primary_language` (largest programming language by bytes)
 - `language_distribution` (programming languages only)
@@ -69,7 +70,8 @@ Functionality:
 Role: aggregation and metrics.
 Functionality:
 - groups bytes by programming language
-- calculates percentages and file counts
+- keeps total repo bytes separate from programming bytes
+- calculates language percentages from programming bytes only
 - chooses primary language from programming languages only
 - forwards branch metadata to final report
 
@@ -172,12 +174,12 @@ Each repo object contains:
 - `repo_slug`, `repo_name`, `clone_url`
 - `repo_created_date_raw`, `repo_created_date_utc`
 - `default_branch`, `branch_count`, `branches_truncated`, `branches[]`
-- `repo_size_bytes`, `primary_language`
+- `repo_size_bytes`, `programming_size_bytes`, `primary_language`
 - `language_distribution[]`
   - `language`
   - `language_size_bytes`
   - `file_count`
-  - `language_percentage`
+  - `language_percentage` (percentage of `programming_size_bytes`)
 - `errors[]`
 
 ### CSV (flat)
@@ -190,6 +192,7 @@ One row per `repo x language`, plus branch metadata columns:
 - `branch_count`
 - `branches_truncated`
 - `branch_sample` (first few branch names)
+- `programming_size_bytes`
 
 ## Performance Notes
 

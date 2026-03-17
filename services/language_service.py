@@ -42,13 +42,18 @@ class LanguageService:
                     language_sizes[language] += size_bytes
                     language_files[language] += 1
 
+        programming_size_bytes = sum(language_sizes.values())
         distribution = []
         for language, size_bytes in sorted(
             language_sizes.items(),
             key=lambda item: item[1],
             reverse=True,
         ):
-            percentage = (size_bytes / repo_size_bytes * 100.0) if repo_size_bytes else 0.0
+            percentage = (
+                (size_bytes / programming_size_bytes * 100.0)
+                if programming_size_bytes
+                else 0.0
+            )
             distribution.append(
                 {
                     "language": language,
@@ -73,6 +78,7 @@ class LanguageService:
             "branches_truncated": bool(repo_payload.get("branches_truncated", False)),
             "branches": repo_payload.get("branches", []),
             "repo_size_bytes": repo_size_bytes,
+            "programming_size_bytes": programming_size_bytes,
             "primary_language": primary_language,
             "language_distribution": distribution,
             "errors": repo_payload.get("errors", []),
@@ -83,10 +89,12 @@ def print_summary(results: List[Dict]) -> None:
     """Print global size-bytes summary across all repositories."""
     totals = defaultdict(int)
     total_bytes = 0
+    total_programming_bytes = 0
     total_branches = 0
 
     for repo in results:
         total_bytes += int(repo.get("repo_size_bytes", 0))
+        total_programming_bytes += int(repo.get("programming_size_bytes", 0))
         total_branches += int(repo.get("branch_count", 0))
         for lang_data in repo.get("language_distribution", []):
             language = lang_data["language"]
@@ -98,11 +106,12 @@ def print_summary(results: List[Dict]) -> None:
         key=lambda x: x[1],
         reverse=True,
     ):
-        pct = (size_bytes / total_bytes * 100.0) if total_bytes else 0.0
+        pct = (size_bytes / total_programming_bytes * 100.0) if total_programming_bytes else 0.0
         print(f"{language:24} {human_size(size_bytes):>10} {pct:6.2f}%")
 
     print(f"\nTotal repos: {len(results)}")
     print(f"Total bytes: {human_size(total_bytes)}")
+    print(f"Total programming bytes: {human_size(total_programming_bytes)}")
     print(f"Total branches discovered: {total_branches}")
 
 
