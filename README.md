@@ -7,7 +7,7 @@ For a full technical runbook (setup, workflow, threading, branch behavior, troub
 - `TECHNICAL_USAGE.txt`
 
 This scanner is for **Bitbucket Server/Data Center only**.
-It computes language distribution by **bytes**, reports non-language file kinds, and also reports repository branches.
+It computes programming language distribution by **bytes** and also reports repository branches.
 
 ## What It Produces
 
@@ -15,10 +15,8 @@ For each repository:
 
 - `repo_size_bytes`
 - `repo_created_date_utc` (when available from Bitbucket)
-- `primary_language` (largest language by bytes)
-- `language_distribution` (size, file count, percentage)
-- `file_kind_distribution` (archives, certificates, binaries, documents, images, etc.)
-- `unknown_distribution` (unmapped extensions that are still preserved)
+- `primary_language` (largest programming language by bytes)
+- `language_distribution` (programming languages only)
 - `default_branch`
 - `branch_count`
 - `branches` (name, latest commit, is_default)
@@ -27,9 +25,7 @@ Example summary:
 
 ```text
 payment-api
-  Java      8.1 MB (78%)
-  XML       0.4 MB (10%)
-  YAML      0.7 MB (7%)
+  Java      8.1 MB (primary programming language)
 
   default branch: main
   branches: 24
@@ -69,19 +65,12 @@ Functionality:
 - uses landmark files like `pom.xml`, `package.json`, `pyproject.toml`
 - helps classify files without clear extensions
 
-- `classifiers/file_kind_classifier.py`
-Role: non-language file classification.
-Functionality:
-- maps repository artifacts like `.zip`, `.pem`, `.pdf`, `.png`, `.dll`
-- groups them into file kinds such as `Archive`, `Certificate`, `Document`, `Image`, `Binary`
-
 - `services/language_service.py`
 Role: aggregation and metrics.
 Functionality:
-- groups bytes by language
-- groups non-language files by file kind
+- groups bytes by programming language
 - calculates percentages and file counts
-- chooses primary language from real languages only
+- chooses primary language from programming languages only
 - forwards branch metadata to final report
 
 - `exporters/csv_exporter.py`
@@ -189,16 +178,6 @@ Each repo object contains:
   - `language_size_bytes`
   - `file_count`
   - `language_percentage`
-- `file_kind_distribution[]`
-  - `file_kind`
-  - `file_kind_size_bytes`
-  - `file_count`
-  - `file_kind_percentage`
-- `unknown_distribution[]`
-  - `label`
-  - `size_bytes`
-  - `file_count`
-  - `percentage`
 - `errors[]`
 
 ### CSV (flat)

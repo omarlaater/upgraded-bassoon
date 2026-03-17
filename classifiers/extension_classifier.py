@@ -89,6 +89,15 @@ class ExtensionClassifier:
             return None
         return f"Extension:{ext.strip('.')}"
 
+    def get_language_type(self, language: str) -> str:
+        """Return the Linguist type for a resolved language label."""
+        metadata = self.language_metadata.get(language, {})
+        return str(metadata.get("type", "") or "")
+
+    def is_programming_language(self, language: str) -> bool:
+        """Return True when Linguist marks the language as programming."""
+        return self.get_language_type(language) == "programming"
+
     def _load_linguist_data(self) -> None:
         with self.languages_path.open("r", encoding="utf8") as stream:
             raw_languages = yaml.safe_load(stream) or {}

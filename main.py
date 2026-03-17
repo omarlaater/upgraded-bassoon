@@ -6,7 +6,6 @@ import requests
 from api.bitbucket_server import BitbucketServerScraper
 from collectors.repository_collector import RepositoryCollector
 from classifiers.extension_classifier import ExtensionClassifier
-from classifiers.file_kind_classifier import FileKindClassifier
 from classifiers.landmark_classifier import LandmarkClassifier
 from exporters.csv_exporter import save_csv
 from exporters.json_exporter import save_json
@@ -60,10 +59,9 @@ def main():
         # If archive download is unavailable, it falls back to the legacy
         # `/files` + `HEAD /raw` workflow without changing the downstream shape.
         collector = RepositoryCollector(scraper)
-        # Service: converts raw metadata into language distribution metrics.
+        # Service: converts raw metadata into programming-language metrics.
         language_service = LanguageService(
             extension_classifier=ExtensionClassifier(),
-            file_kind_classifier=FileKindClassifier(),
             landmark_classifier=LandmarkClassifier(),
         )
 
