@@ -8,7 +8,6 @@ from collectors.repository_collector import RepositoryCollector
 from classifiers.extension_classifier import ExtensionClassifier
 from classifiers.landmark_classifier import LandmarkClassifier
 from exporters.csv_exporter import save_csv
-from exporters.extension_csv_exporter import save_extension_csv
 from exporters.json_exporter import save_json
 from services.language_service import LanguageService, print_summary
 
@@ -23,7 +22,6 @@ def main():
     parser.add_argument("--server-token", default=config.SERVER_TOKEN)
     parser.add_argument("--out-csv", default=config.OUTPUT_CSV)
     parser.add_argument("--out-json", default=config.OUTPUT_JSON)
-    parser.add_argument("--out-extensions-csv", default=config.OUTPUT_EXTENSIONS_CSV)
     parser.add_argument("--max-workers", type=int, default=config.DEFAULT_MAX_WORKERS)
     parser.add_argument("--file-workers", type=int, default=config.DEFAULT_FILE_WORKERS)
     parser.add_argument("--max-branches", type=int, default=config.DEFAULT_MAX_BRANCHES)
@@ -82,7 +80,6 @@ def main():
         return 1
 
     save_csv(results, args.out_csv)
-    save_extension_csv(results, args.out_extensions_csv)
     save_json(results, args.out_json)
     print_summary(results)
 

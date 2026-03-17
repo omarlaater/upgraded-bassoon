@@ -92,9 +92,13 @@ Functionality:
 - forwards branch metadata to final report
 
 - `exporters/csv_exporter.py`
-Role: tabular export.
+Role: unified tabular export.
 Functionality:
-- flattens nested JSON into rows (`repo x language`)
+- writes one flat CSV with multiple row types:
+  - `repo_summary`
+  - `programming_language`
+  - `file_type`
+  - `unmapped_extension`
 - includes branch fields (`default_branch`, `branch_count`, sample branch names)
 
 - `exporters/json_exporter.py`
@@ -157,7 +161,6 @@ Environment variables:
 - `BB_CA_BUNDLE` (optional when `BB_INSECURE=false`)
 - `OUTPUT_CSV` (default: `bitbucket_languages.csv`)
 - `OUTPUT_JSON` (default: `bitbucket_languages.json`)
-- `OUTPUT_EXTENSIONS_CSV` (default: `bitbucket_unmapped_extensions.csv`)
 - `MAX_WORKERS` (repo-level parallelism, default `8`)
 - `FILE_WORKERS` (legacy per-repo fallback HEAD parallelism, default `16`)
 - `INCLUDE_BRANCHES` (default `true`)
@@ -169,7 +172,6 @@ Environment variables:
 python main.py \
   --server-url "https://bitbucket.mycompany.com" \
   --server-token "<token>" \
-  --out-extensions-csv "bitbucket_unmapped_extensions.csv" \
   --max-workers 8 \
   --file-workers 16 \
   --include-branches \
@@ -214,29 +216,42 @@ Each repo object contains:
 
 ### CSV (flat)
 
-One row per `repo x programming language`, plus branch metadata columns:
+One unified CSV is written. It contains one row per:
 
-- `repo_created_date_raw`
-- `repo_created_date_utc`
-- `default_branch`
-- `branch_count`
-- `branches_truncated`
-- `branch_sample` (first few branch names)
-- `programming_size_bytes`
-- `file_type_size_bytes`
-
-The richer `file_type_distribution` is kept in JSON output.
-
-### Unmapped Extension CSV (flat)
-
-One row per `repo x unmapped extension`:
-
+- `repo_summary`
+- `programming_language`
+- `file_type`
 - `unmapped_extension`
-- `unmapped_extension_size_repo_bytes`
-- `unmapped_extension_file_count`
-- `unmapped_extension_percentage`
 
-This file captures only extensions that are not known in `languages.yaml`, such as `.pem`, `.jpg`, `.zip`, and `(no_extension)` for unknown files without extensions.
+Important columns:
+
+- repository metadata:
+  - `project_key`, `project_name`
+  - `repo_slug`, `repo_name`, `clone_url`
+  - `repo_created_date_raw`, `repo_created_date_utc`
+  - `default_branch`, `branch_count`, `branches_truncated`, `branch_sample`
+  - `primary_language`
+  - `repo_size_bytes`
+  - `programming_size_bytes`
+  - `file_type_size_bytes`
+  - `unmapped_extension_size_bytes`
+- row classification:
+  - `row_type`
+  - `item_name`
+  - `item_category`
+  - `eligible_for_primary`
+  - `size_bytes`
+  - `file_count`
+  - `percentage`
+  - `percentage_basis`
+
+Examples:
+
+- `row_type=programming_language`, `item_name=Python`
+- `row_type=file_type`, `item_name=XML`, `item_category=data`
+- `row_type=unmapped_extension`, `item_name=.pem`
+
+This keeps Splunk on a single lookup while preserving programming language, YAML-known file types, and only the extensions not known in `languages.yaml`.
 
 ## Performance Notes
 
