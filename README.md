@@ -7,7 +7,7 @@ For a full technical runbook (setup, workflow, threading, branch behavior, troub
 - `TECHNICAL_USAGE.txt`
 
 This scanner is for **Bitbucket Server/Data Center only**.
-It computes programming language distribution by **bytes** and also reports repository branches.
+It computes programming language distribution by **bytes**, stores detected file types, and also reports repository branches.
 
 ## What It Produces
 
@@ -15,9 +15,11 @@ For each repository:
 
 - `repo_size_bytes`
 - `programming_size_bytes`
+- `file_type_size_bytes`
 - `repo_created_date_utc` (when available from Bitbucket)
 - `primary_language` (largest programming language by bytes)
 - `language_distribution` (programming languages only)
+- `file_type_distribution` (all detected YAML-backed types, including XML/JSON/YAML/Markdown)
 - `default_branch`
 - `branch_count`
 - `branches` (name, latest commit, is_default)
@@ -27,6 +29,11 @@ Example summary:
 ```text
 payment-api
   Java      8.1 MB (primary programming language)
+
+  file types:
+  Java      8.1 MB
+  XML       0.4 MB
+  YAML      0.7 MB
 
   default branch: main
   branches: 24
@@ -70,6 +77,7 @@ Functionality:
 Role: aggregation and metrics.
 Functionality:
 - groups bytes by programming language
+- groups all detected YAML-backed types separately for inventory/reporting
 - keeps total repo bytes separate from programming bytes
 - calculates language percentages from programming bytes only
 - chooses primary language from programming languages only
@@ -174,17 +182,24 @@ Each repo object contains:
 - `repo_slug`, `repo_name`, `clone_url`
 - `repo_created_date_raw`, `repo_created_date_utc`
 - `default_branch`, `branch_count`, `branches_truncated`, `branches[]`
-- `repo_size_bytes`, `programming_size_bytes`, `primary_language`
+- `repo_size_bytes`, `programming_size_bytes`, `file_type_size_bytes`, `primary_language`
 - `language_distribution[]`
   - `language`
   - `language_size_bytes`
   - `file_count`
   - `language_percentage` (percentage of `programming_size_bytes`)
+- `file_type_distribution[]`
+  - `language`
+  - `type`
+  - `size_bytes`
+  - `file_count`
+  - `percentage` (percentage of `file_type_size_bytes`)
+  - `eligible_for_primary`
 - `errors[]`
 
 ### CSV (flat)
 
-One row per `repo x language`, plus branch metadata columns:
+One row per `repo x programming language`, plus branch metadata columns:
 
 - `repo_created_date_raw`
 - `repo_created_date_utc`
@@ -193,6 +208,9 @@ One row per `repo x language`, plus branch metadata columns:
 - `branches_truncated`
 - `branch_sample` (first few branch names)
 - `programming_size_bytes`
+- `file_type_size_bytes`
+
+The richer `file_type_distribution` is kept in JSON output.
 
 ## Performance Notes
 

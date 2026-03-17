@@ -17,13 +17,14 @@ TYPE_PRIORITY = {
     "prose": 3,
 }
 
-# Shared extensions need a deterministic winner when Linguist lists
-# multiple candidates. These defaults favor the most useful repo-level label.
+# Shared extensions need deterministic handling when Linguist lists multiple
+# candidates. A `None` value means "too ambiguous, do not auto-classify".
 AMBIGUOUS_EXTENSION_DEFAULTS = {
     ".cls": "Apex",
-    ".h": "C",
+    ".h": None,
     ".json": "JSON",
-    ".m": "Objective-C",
+    ".m": None,
+    ".md": "Markdown",
     ".mm": "Objective-C++",
     ".pl": "Perl",
     ".sql": "SQL",
@@ -154,9 +155,12 @@ class ExtensionClassifier:
             return normalized_candidates[0]
 
         if ext:
-            override = AMBIGUOUS_EXTENSION_DEFAULTS.get(ext)
-            if override in normalized_candidates:
-                return override
+            if ext in AMBIGUOUS_EXTENSION_DEFAULTS:
+                override = AMBIGUOUS_EXTENSION_DEFAULTS[ext]
+                if override is None:
+                    return None
+                if override in normalized_candidates:
+                    return override
 
         def sort_key(language: str) -> tuple[int, int, str]:
             metadata = self.language_metadata.get(language, {})

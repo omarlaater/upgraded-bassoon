@@ -1,4 +1,4 @@
-"""Service layer: converts raw metadata into programming-language analytics."""
+"""Service layer: converts raw metadata into programming and file-type analytics."""
 
 from collections import defaultdict
 from typing import Dict, List
@@ -8,7 +8,7 @@ from classifiers.landmark_classifier import LandmarkClassifier
 
 
 class LanguageService:
-    """Transforms raw file metadata into programming-language distributions only."""
+    """Transforms raw file metadata into programming and file-type distributions."""
 
     def __init__(
         self,
@@ -24,6 +24,9 @@ class LanguageService:
     def _build_one_report(self, repo_payload: Dict) -> Dict:
         language_sizes = defaultdict(int)
         language_files = defaultdict(int)
+        file_type_sizes = defaultdict(int)
+        file_type_files = defaultdict(int)
+        file_type_types = {}
 
         repo_size_bytes = 0
         files = repo_payload.get("files", [])
@@ -38,11 +41,16 @@ class LanguageService:
                 language = self.landmark_classifier.detect_language(path)
             if language:
                 language_type = self.extension_classifier.get_language_type(language)
-                if not language_type or language_type == "programming":
+                normalized_type = language_type or "programming"
+                file_type_sizes[language] += size_bytes
+                file_type_files[language] += 1
+                file_type_types[language] = normalized_type
+                if normalized_type == "programming":
                     language_sizes[language] += size_bytes
                     language_files[language] += 1
 
         programming_size_bytes = sum(language_sizes.values())
+        file_type_size_bytes = sum(file_type_sizes.values())
         distribution = []
         for language, size_bytes in sorted(
             language_sizes.items(),
@@ -63,6 +71,29 @@ class LanguageService:
                 }
             )
 
+        file_type_distribution = []
+        for language, size_bytes in sorted(
+            file_type_sizes.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        ):
+            percentage = (
+                (size_bytes / file_type_size_bytes * 100.0)
+                if file_type_size_bytes
+                else 0.0
+            )
+            file_type = file_type_types.get(language, "programming")
+            file_type_distribution.append(
+                {
+                    "language": language,
+                    "type": file_type,
+                    "size_bytes": size_bytes,
+                    "file_count": file_type_files[language],
+                    "percentage": round(percentage, 2),
+                    "eligible_for_primary": file_type == "programming",
+                }
+            )
+
         primary_language = distribution[0]["language"] if distribution else "Unknown"
         return {
             "project_key": repo_payload["project_key"],
@@ -79,8 +110,10 @@ class LanguageService:
             "branches": repo_payload.get("branches", []),
             "repo_size_bytes": repo_size_bytes,
             "programming_size_bytes": programming_size_bytes,
+            "file_type_size_bytes": file_type_size_bytes,
             "primary_language": primary_language,
             "language_distribution": distribution,
+            "file_type_distribution": file_type_distribution,
             "errors": repo_payload.get("errors", []),
         }
 
@@ -88,17 +121,25 @@ class LanguageService:
 def print_summary(results: List[Dict]) -> None:
     """Print global size-bytes summary across all repositories."""
     totals = defaultdict(int)
+    file_type_totals = defaultdict(int)
+    file_type_labels = {}
     total_bytes = 0
     total_programming_bytes = 0
+    total_file_type_bytes = 0
     total_branches = 0
 
     for repo in results:
         total_bytes += int(repo.get("repo_size_bytes", 0))
         total_programming_bytes += int(repo.get("programming_size_bytes", 0))
+        total_file_type_bytes += int(repo.get("file_type_size_bytes", 0))
         total_branches += int(repo.get("branch_count", 0))
         for lang_data in repo.get("language_distribution", []):
             language = lang_data["language"]
             totals[language] += int(lang_data.get("language_size_bytes", 0))
+        for file_type_data in repo.get("file_type_distribution", []):
+            language = file_type_data["language"]
+            file_type_totals[language] += int(file_type_data.get("size_bytes", 0))
+            file_type_labels[language] = file_type_data.get("type", "")
 
     print("\nProgramming Language Summary (by bytes)")
     for language, size_bytes in sorted(
@@ -109,9 +150,22 @@ def print_summary(results: List[Dict]) -> None:
         pct = (size_bytes / total_programming_bytes * 100.0) if total_programming_bytes else 0.0
         print(f"{language:24} {human_size(size_bytes):>10} {pct:6.2f}%")
 
+    if file_type_totals:
+        print("\nDetected File Type Summary (recognized bytes)")
+        for language, size_bytes in sorted(
+            file_type_totals.items(),
+            key=lambda x: x[1],
+            reverse=True,
+        ):
+            pct = (size_bytes / total_file_type_bytes * 100.0) if total_file_type_bytes else 0.0
+            label = file_type_labels.get(language, "")
+            display_name = f"{language} [{label}]" if label else language
+            print(f"{display_name:24} {human_size(size_bytes):>10} {pct:6.2f}%")
+
     print(f"\nTotal repos: {len(results)}")
     print(f"Total bytes: {human_size(total_bytes)}")
     print(f"Total programming bytes: {human_size(total_programming_bytes)}")
+    print(f"Total recognized file-type bytes: {human_size(total_file_type_bytes)}")
     print(f"Total branches discovered: {total_branches}")
 
 
